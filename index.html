@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <!-- 鎖定縮放，以便我們自己控制畫布縮放 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>森之拋物線 | 二次函數繪圖</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Serif TC', serif;
+            background-color: #f4f1ea; /* 米色紙張感 */
+            color: #4a3b2a; /* 深咖啡色文字 */
+            overscroll-behavior: none; /* 防止下拉重整 */
+        }
+        
+        /* 木紋質感背景 */
+        .wood-texture {
+            background-color: #d7c4a1;
+            background-image: repeating-linear-gradient(45deg, rgba(160, 120, 80, 0.1) 0px, rgba(160, 120, 80, 0.1) 2px, transparent 2px, transparent 8px),
+                              linear-gradient(to bottom, #e6d5b8, #dbbca0);
+            box-shadow: inset 0 0 20px rgba(74, 59, 42, 0.2);
+        }
+
+        /* 內凹的輸入框風格 */
+        .input-wood {
+            background-color: #f9f7f2;
+            border: 2px solid #8c7b66;
+            color: #5d4037;
+            box-shadow: inset 2px 2px 5px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            padding: 0; 
+            text-align: center;
+            /* 防止手機長按選取 */
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none; /* 關鍵：阻止瀏覽器預設捲動，由 JS 接管 */
+        }
+        .input-wood:focus {
+            outline: none;
+            border-color: #5d4037;
+            background-color: #fff;
+        }
+        /* 鎖定狀態的輸入框 */
+        .input-wood:disabled, .input-wood[readonly] {
+            background-color: #e5e5e5;
+            color: #888;
+            border-color: #b0bec5;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        /* 畫布紙張質感 */
+        .canvas-paper {
+            background-color: #fffaf0;
+            border: 4px solid #8c7b66;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
+            border-radius: 4px;
+            touch-action: none; /* 關鍵：畫布縮放由 JS 接管 */
+        }
+
+        /* 按鈕樣式 */
+        .btn-wood-action {
+            background: linear-gradient(to bottom, #8d6e63, #6d4c41);
+            color: white;
+            border: 1px solid #5d4037;
+            box-shadow: 0 2px 0 #3e2723;
+            transition: all 0.1s;
+            font-family: 'Noto Serif TC', serif;
+        }
+        .btn-wood-action:hover {
+            background: linear-gradient(to bottom, #a1887f, #8d6e63);
+        }
+        .btn-wood-action:active {
+            transform: translateY(2px);
+            box-shadow: 0 0 0 #3e2723;
+        }
+
+        .btn-copy {
+            background-color: #a1887f;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-family: sans-serif;
+            font-size: 0.7rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 6px;
+        }
+        .btn-copy:hover {
+            background-color: #8d6e63;
+        }
+
+        /* 自定義捲軸 */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1e7d0; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a1887f; 
+            border-radius: 5px;
+        }
+
+        /* 直向模式警告層 */
+        #portrait-warning {
+            display: none;
+        }
+        @media (orientation: portrait) and (max-width: 1024px) {
+            #portrait-warning {
+                display: flex;
+                position: fixed;
+                top: 0; left: 0; width: 100%; height: 100%;
+                background: #f4f1ea;
+                z-index: 9999;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                padding: 20px;
+            }
+            body { overflow: hidden; } /* 禁止捲動 */
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-4 px-4 relative">
+
+    <!-- 直向模式警告 -->
+    <div id="portrait-warning">
+        <div class="mb-4 text-amber-900">
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-pulse mx-auto">
+                <path d="M17 4v16M7 4v4m0 8v4M7 12h10"/>
+                <path d="M2 12h20"/> 
+            </svg>
+        </div>
+        <h2 class="text-2xl font-bold text-amber-900 mb-2">請旋轉您的裝置</h2>
+        <p class="text-amber-800">為了獲得最佳的教學體驗，<br>本軟體需要使用橫向模式操作。</p>
+    </div>
+
+    <!-- 模式切換按鈕 (常駐右上角) -->
+    <div class="absolute top-2 right-4 z-20">
+        <button onclick="toggleMode()" id="mode-btn" class="btn-wood-action px-4 py-2 rounded-lg font-bold text-sm tracking-widest flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/>
+            </svg>
+            開啟平移功能
+        </button>
+    </div>
+
+    <!-- 主標題區 -->
+    <header class="mb-4 text-center">
+        <h1 class="text-3xl md:text-4xl font-bold tracking-widest text-amber-900 mb-1" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">森之拋物線</h1>
+        <p class="text-amber-800 text-xs md:text-sm opacity-80">二次函數圖形探索工具</p>
+    </header>
+
+    <!-- 主控制台 -->
+    <main class="w-full max-w-7xl flex flex-row gap-4 h-[calc(100vh-120px)]">
+        
+        <!-- 左側：輸入與數據面板 (固定左側，可捲動) -->
+        <section class="wood-texture p-4 rounded-xl border border-amber-800/30 flex flex-col gap-4 overflow-y-auto w-auto min-w-[340px] max-w-[400px]">
+            
+            <!-- 區域 1: 一般模式輸入 (預設顯示) -->
+            <div id="panel-simple" class="bg-white/60 p-4 rounded-lg shadow-sm border border-amber-200 flex flex-col items-center">
+                <h2 class="text-lg font-bold mb-4 border-b border-amber-300 pb-2 text-amber-900 w-full text-center">函數設定</h2>
+                
+                <!-- 標準式輸入 -->
+                <div class="flex items-center text-xl flex-wrap justify-center gap-1 font-serif mb-4">
+                    <span class="font-bold italic mr-1">y</span>
+                    <span class="font-bold mr-1">=</span>
+                    
+                    <div class="flex flex-col items-center relative group">
+                        <div class="absolute bottom-full mb-1 text-[10px] font-bold text-amber-800 whitespace-nowrap bg-amber-100/90 px-2 py-0.5 rounded border border-amber-200/50 shadow-sm">
+                            開口<span class="info-direction-display">向上</span>
+                        </div>
+                        <!-- a 改為整數 (step=1) -->
+                        <input type="text" inputmode="decimal" id="input-a-simple" step="1" class="input-wood w-12 h-9 text-xl font-bold rounded" placeholder="a">
+                    </div>
+
+                    <!-- x 與 空格 (取代 - h) -->
+                    <span>( <span class="italic">x</span> </span>
+                    <input type="text" inputmode="decimal" id="input-h-simple" step="1" class="input-wood w-12 h-9 text-xl font-bold rounded mx-1" placeholder="-h">
+                    <span>)</span><sup class="text-base">2</sup>
+                    
+                    <!-- 空格 (取代 + k) -->
+                    <input type="text" inputmode="decimal" id="input-k-simple" step="1" class="input-wood w-12 h-9 text-xl font-bold rounded mx-1" placeholder="k">
+                </div>
+
+                <!-- 一般式顯示 (整合在標準式底下) -->
+                <div class="flex items-center justify-center text-base w-full relative pt-2 border-t border-amber-100/50">
+                    <span class="text-xs font-bold text-amber-800 mr-2 bg-amber-100 px-2 py-1 rounded">一般式</span>
+                    <span id="display-general-simple" class="text-lg font-bold font-mono text-amber-800 italic tracking-wider">
+                        <!-- JS自動填入 -->
+                    </span>
+                    <button onclick="copyEquation('simple')" class="btn-copy ml-2" title="複製一般式">複製</button>
+                    <div id="copy-toast-simple" class="absolute -bottom-6 text-xs text-green-700 font-bold opacity-0 transition-opacity duration-300">已複製！</div>
+                </div>
+            </div>
+
+            <!-- 區域 2: 平移模式輸入 (預設隱藏) -->
+            <div id="panel-translation" class="hidden bg-white/60 p-4 rounded-lg shadow-sm border border-amber-200 flex flex-col items-center">
+                <h2 class="text-lg font-bold mb-4 border-b border-amber-300 pb-2 text-amber-900 w-full text-center">函數平移教學</h2>
+                
+                <!-- 垂直排列兩個步驟，適應手機橫向寬度限制 -->
+                <div class="flex flex-col items-center w-full gap-4 font-serif">
+                    
+                    <!-- 上：舊圖形 (Step 1) -->
+                    <div class="flex flex-col items-center bg-amber-50 p-3 rounded border-2 border-amber-200 shadow-inner w-full">
+                        <span class="text-xs font-bold text-amber-800 mb-2 bg-amber-200/50 px-2 rounded">步驟 1：平移前 (舊)</span>
+                        <div class="text-base font-bold text-amber-900 whitespace-nowrap flex items-center gap-1 justify-center">
+                            <span class="italic">y</span> = 
+                            <input type="text" inputmode="decimal" id="input-a-trans" step="1" class="input-wood w-10 h-7 text-base font-bold rounded border-amber-400 text-center" placeholder="a">
+                            <span>( <span class="italic">x</span> </span>
+                            <input type="text" inputmode="decimal" id="input-h-trans-old" step="1" class="input-wood w-10 h-7 text-base font-bold rounded mx-0.5 text-center" placeholder="-h">
+                            <span>)</span><sup class="text-xs">2</sup>
+                            <input type="text" inputmode="decimal" id="input-k-trans-old" step="1" class="input-wood w-10 h-7 text-base font-bold rounded mx-0.5 text-center" placeholder="k">
+                        </div>
+                        <div class="mt-3 w-full border-t border-amber-200/50 pt-2 flex flex-col items-center">
+                            <div class="flex items-center gap-1">
+                                <span class="text-[10px] font-bold text-gray-500">一般式</span>
+                                <span id="display-general-step1" class="text-sm font-bold font-mono text-gray-600"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 中：平移箭頭 (改成向下箭頭，文字對調：水平在左，垂直在右) -->
+                    <div class="flex items-center justify-center gap-4 w-full py-1">
+                        <span id="trans-text-right" class="text-xs font-bold text-red-600">水平平移</span>
+                        <div class="relative w-6 h-8 flex items-center justify-center">
+                            <!-- 向下箭頭 -->
+                            <svg class="w-full h-full text-amber-800/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 3v14m0 0l-4-4m4 4l4-4"></path>
+                            </svg>
+                        </div>
+                        <span id="trans-text-up" class="text-xs font-bold text-blue-600">垂直平移</span>
+                    </div>
+
+                    <!-- 下：新圖形 (Step 2) -->
+                    <div class="flex flex-col items-center bg-white p-3 rounded border border-amber-200 shadow-sm w-full">
+                        <span class="text-xs font-bold text-amber-900 mb-2">步驟 2：平移後 (新)</span>
+                        <div class="text-base font-bold text-amber-900 whitespace-nowrap flex items-center gap-1 justify-center">
+                            <span class="font-bold italic mr-0.5">y</span>
+                            <span class="font-bold mr-0.5">=</span>
+                            <input type="text" id="input-a-locked" readonly class="input-wood w-10 h-7 text-base font-bold rounded opacity-70 text-center" title="請在左側修改 a 值">
+                            <span>( <span class="italic">x</span> </span>
+                            <input type="text" inputmode="decimal" id="input-h-trans-new" step="1" class="input-wood w-10 h-7 text-base font-bold rounded mx-0.5 text-center" placeholder="-h">
+                            <span>)</span><sup class="text-xs">2</sup>
+                            <input type="text" inputmode="decimal" id="input-k-trans-new" step="1" class="input-wood w-10 h-7 text-base font-bold rounded mx-0.5 text-center" placeholder="k">
+                        </div>
+                        <div class="mt-3 w-full border-t border-amber-100 pt-2 flex flex-col items-center">
+                            <div class="flex items-center gap-1">
+                                <span class="text-[10px] font-bold text-amber-800">一般式</span>
+                                <span id="display-general-step2" class="text-sm font-bold font-mono text-amber-800"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 下方提示 -->
+            <div class="mt-auto pt-4 border-t border-amber-800/10 w-full">
+                <p id="hint-text" class="text-xs text-amber-700/60 text-center leading-relaxed">
+                    * 虛線為平移前，實線為平移後<br>
+                    * 淡紅色虛線箭頭顯示頂點平移軌跡<br>
+                    * 支援單指滑動數值、雙指縮放圖形
+                </p>
+            </div>
+        </section>
+
+        <!-- 右側：畫布區 (填滿剩餘空間) -->
+        <section class="flex-1 relative flex justify-center items-center bg-amber-50/50 rounded-xl border border-amber-800/20 overflow-hidden">
+            <!-- 關鍵修正：加入 max-h-full 與 aspect-ratio -->
+            <div class="canvas-paper p-1 relative shadow-lg max-w-full max-h-full" style="aspect-ratio: 4/3;">
+                <!-- 畫布 800x600 (邏輯尺寸), 透過 CSS 響應式顯示 -->
+                <canvas id="graphCanvas" width="800" height="600" class="cursor-crosshair w-full h-full block touch-none"></canvas>
+                <!-- 座標顯示浮動標籤 -->
+                <div id="tooltip" class="absolute hidden bg-amber-800 text-white text-xs px-2 py-1 rounded pointer-events-none" style="opacity: 0.9; z-index: 10;"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+        const tooltip = document.getElementById('tooltip');
+
+        // 狀態管理
+        let isTranslationMode = false;
+        let scale = 30; // 初始比例
+        let offsetX = canvas.width / 2;
+        let offsetY = canvas.height / 2;
+        
+        // 輸入DOM - 一般模式
+        const inputASimple = document.getElementById('input-a-simple');
+        const inputHSimple = document.getElementById('input-h-simple');
+        const inputKSimple = document.getElementById('input-k-simple');
+
+        // 輸入DOM - 平移模式 (左側 Step 1)
+        const inputATrans = document.getElementById('input-a-trans');
+        const inputHTransOld = document.getElementById('input-h-trans-old');
+        const inputKTransOld = document.getElementById('input-k-trans-old');
+
+        // 輸入DOM - 平移模式 (右側 Step 2)
+        const inputALocked = document.getElementById('input-a-locked');
+        const inputHTransNew = document.getElementById('input-h-trans-new');
+        const inputKTransNew = document.getElementById('input-k-trans-new');
+
+        // 面板與按鈕
+        const panelSimple = document.getElementById('panel-simple');
+        const panelTranslation = document.getElementById('panel-translation');
+        const modeBtn = document.getElementById('mode-btn');
+        const hintText = document.getElementById('hint-text');
+
+        // 資訊DOM
+        const displayDirectionList = document.querySelectorAll('.info-direction-display');
+        const displayGeneralSimple = document.getElementById('display-general-simple');
+        const displayGeneralStep1 = document.getElementById('display-general-step1');
+        const displayGeneralStep2 = document.getElementById('display-general-step2');
+        const transTextUp = document.getElementById('trans-text-up');
+        const transTextRight = document.getElementById('trans-text-right');
+
+        let currentGeneralEquation = "";
+
+        // 獨立的數據模型
+        let simpleData = { a: 1, h: 2, k: -3 };
+        let transData = { a: 1, h_old: 0, k_old: 0, h: -2, k: -3 };
+
+        window.onload = function() {
+            resizeCanvas(); // 初始化畫布大小
+            syncInputsToData();
+            draw();
+            setupEventListeners();
+            window.addEventListener('resize', () => {
+                resizeCanvas();
+                draw();
+            });
+        };
+
+        function resizeCanvas() {
+            // 讓 Canvas 填滿容器，但保持內部解析度
+            const container = canvas.parentElement.parentElement;
+            offsetX = canvas.width / 2;
+            offsetY = canvas.height / 2;
+        }
+
+        function toggleMode() {
+            isTranslationMode = !isTranslationMode;
+            
+            if (isTranslationMode) {
+                panelSimple.classList.add('hidden');
+                panelTranslation.classList.remove('hidden');
+                modeBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="mr-2">
+                        <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                    </svg>
+                    返回一般模式`;
+                // 在平移模式下提示
+                hintText.innerHTML = `* 虛線為平移前，實線為平移後<br>* 淡紅色虛線箭頭顯示頂點平移軌跡<br>* 支援單指滑動數值、雙指縮放圖形`;
+            } else {
+                panelSimple.classList.remove('hidden');
+                panelTranslation.classList.add('hidden');
+                modeBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="mr-2">
+                        <path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/>
+                    </svg>
+                    開啟平移功能`;
+                hintText.innerHTML = `* 支援單指滑動數值、雙指縮放圖形`;
+            }
+            syncInputsToData();
+            draw();
+        }
+
+        function setupEventListeners() {
+            const allInputs = [
+                inputASimple, inputHSimple, inputKSimple,
+                inputATrans, inputHTransOld, inputKTransOld,
+                inputHTransNew, inputKTransNew
+            ];
+
+            allInputs.forEach(el => {
+                el.addEventListener('input', (e) => {
+                    handleInputChange(el);
+                });
+                el.addEventListener('blur', () => {
+                    syncInputsToData();
+                });
+                el.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        adjustValue(el, e.key === 'ArrowUp' ? 1 : -1);
+                    }
+                });
+                el.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    adjustValue(el, e.deltaY < 0 ? 1 : -1);
+                });
+                let touchStartY = 0;
+                let initialVal = 0;
+                el.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 1) {
+                        touchStartY = e.touches[0].clientY;
+                        initialVal = parseInputVal(el.value);
+                    }
+                }, {passive: false});
+                el.addEventListener('touchmove', (e) => {
+                    if (e.touches.length === 1) {
+                        e.preventDefault(); // 防止滾動頁面
+                        const currentY = e.touches[0].clientY;
+                        const diff = touchStartY - currentY; // 往上滑是正值 (增加)
+                        const step = parseFloat(el.getAttribute('step')) || 1;
+                        const change = Math.round(diff / 20) * step;
+                        let newVal = Math.round((initialVal + change) * 10) / 10;
+                        if (newVal !== parseInputVal(el.value)) {
+                            el.value = formatDisplayVal(newVal);
+                            handleInputChange(el);
+                        }
+                    }
+                }, {passive: false});
+            });
+
+            // --- 畫布觸控縮放 (Pinch to Zoom) ---
+            let initialPinchDistance = null;
+            let initialScale = null;
+
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    initialPinchDistance = Math.hypot(
+                        e.touches[0].pageX - e.touches[1].pageX,
+                        e.touches[0].pageY - e.touches[1].pageY
+                    );
+                    initialScale = scale;
+                }
+            }, {passive: false});
+
+            canvas.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 2 && initialPinchDistance) {
+                    e.preventDefault();
+                    const currentDistance = Math.hypot(
+                        e.touches[0].pageX - e.touches[1].pageX,
+                        e.touches[0].pageY - e.touches[1].pageY
+                    );
+                    const ratio = currentDistance / initialPinchDistance;
+                    scale = Math.max(10, Math.min(100, initialScale * ratio));
+                    draw();
+                }
+            }, {passive: false});
+
+            canvas.addEventListener('touchend', () => {
+                initialPinchDistance = null;
+                initialScale = null;
+            });
+
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = Math.sign(e.deltaY);
+                if (delta > 0) scale = Math.max(10, scale - 2);
+                else scale = Math.min(100, scale + 2);
+                draw();
+            }, {passive: false});
+
+            canvas.addEventListener('mousemove', (e) => {
+                updateTooltip(e.clientX, e.clientY);
+            });
+            canvas.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+            });
+            canvas.addEventListener('touchstart', (e) => {
+                if(e.touches.length === 1) updateTooltip(e.touches[0].clientX, e.touches[0].clientY);
+            }, {passive: false});
+            canvas.addEventListener('touchmove', (e) => {
+                if(e.touches.length === 1) updateTooltip(e.touches[0].clientX, e.touches[0].clientY);
+            }, {passive: false});
+        }
+
+        function updateTooltip(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (clientX - rect.left) * scaleX;
+            const y = (clientY - rect.top) * scaleY;
+            const mathX = (x - offsetX) / scale;
+            const mathY = -(y - offsetY) / scale;
+            tooltip.style.left = (clientX - rect.left + 15) + 'px';
+            tooltip.style.top = (clientY - rect.top + 15) + 'px';
+            tooltip.style.display = 'block';
+            tooltip.textContent = `(${mathX.toFixed(1)}, ${mathY.toFixed(1)})`;
+        }
+
+        function adjustValue(el, direction) {
+            let currentVal = parseInputVal(el.value);
+            let step = parseFloat(el.getAttribute('step')) || 1;
+            let newVal = Math.round((currentVal + direction * step) * 10) / 10;
+            el.value = formatDisplayVal(newVal);
+            handleInputChange(el);
+        }
+
+        function handleInputChange(el) {
+            if (el === inputASimple || el === inputHSimple || el === inputKSimple) updateDataFromSimple();
+            else updateDataFromTrans();
+            draw();
+        }
+
+        function formatDisplayVal(val) {
+            if (val > 0) return "+" + parseFloat(val); 
+            if (val === 0) return "0";
+            return val.toString();
+        }
+
+        function parseInputVal(str) {
+            if (!str) return 0;
+            return parseFloat(str) || 0;
+        }
+
+        function parseIntegerVal(str) {
+            if (!str) return 0;
+            let val = parseFloat(str) || 0;
+            return Math.round(val);
+        }
+
+        function updateDataFromSimple() {
+            simpleData.a = parseIntegerVal(inputASimple.value); 
+            simpleData.h = -1 * parseIntegerVal(inputHSimple.value); 
+            simpleData.k = parseIntegerVal(inputKSimple.value); 
+            syncInputsToData();
+        }
+
+        function updateDataFromTrans() {
+            transData.a = parseIntegerVal(inputATrans.value); 
+            transData.h_old = -1 * parseIntegerVal(inputHTransOld.value);
+            transData.k_old = parseIntegerVal(inputKTransOld.value);
+            transData.h = -1 * parseIntegerVal(inputHTransNew.value);
+            transData.k = parseIntegerVal(inputKTransNew.value);
+            syncInputsToData();
+        }
+
+        function syncInputsToData() {
+            const activeEl = document.activeElement;
+            const safeUpdate = (el, val) => {
+                if (el !== activeEl) {
+                    el.value = formatDisplayVal(val);
+                }
+            };
+
+            const simpleDispH = simpleData.h === 0 ? 0 : -simpleData.h;
+            safeUpdate(inputASimple, simpleData.a);
+            safeUpdate(inputHSimple, simpleDispH);
+            safeUpdate(inputKSimple, simpleData.k);
+
+            const transDispH = transData.h === 0 ? 0 : -transData.h;
+            const transDispHOld = transData.h_old === 0 ? 0 : -transData.h_old;
+
+            safeUpdate(inputATrans, transData.a);
+            safeUpdate(inputALocked, transData.a);
+            safeUpdate(inputHTransOld, transDispHOld);
+            safeUpdate(inputKTransOld, transData.k_old);
+            safeUpdate(inputHTransNew, transDispH);
+            safeUpdate(inputKTransNew, transData.k);
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGrid();
+            drawAxes();
+            
+            if (isTranslationMode) {
+                const { a, h, k, h_old, k_old } = transData;
+                if (a === 0) { drawErrorText(); return; }
+                
+                // 畫截距 (新圖形)
+                drawIntercepts(a, h, k);
+
+                drawParabola(a, h_old, k_old, true); 
+                drawParabola(a, h, k, false); 
+                drawTranslationArrow(h_old, k_old, h, k);
+                drawSymmetryAxis(h); 
+                updateInfo(a, h, k, h_old, k_old);
+            } else {
+                const { a, h, k } = simpleData;
+                if (a === 0) { drawErrorText(); return; }
+                
+                // 畫截距
+                drawIntercepts(a, h, k);
+
+                drawParabola(a, h, k, false);
+                drawSymmetryAxis(h); 
+                updateInfo(a, h, k, 0, 0); 
+            }
+        }
+
+        function drawErrorText() {
+            ctx.font = "24px Noto Serif TC";
+            ctx.fillStyle = "#a1887f";
+            ctx.textAlign = "center";
+            ctx.fillText("當 a = 0 時，這不是二次函數喔！", canvas.width/2, canvas.height/2);
+        }
+
+        function drawGrid() {
+            ctx.beginPath();
+            ctx.strokeStyle = "#e5e5e5"; 
+            ctx.lineWidth = 1;
+            for (let x = offsetX % scale; x < canvas.width; x += scale) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+            }
+            for (let y = offsetY % scale; y < canvas.height; y += scale) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+            }
+            ctx.stroke();
+        }
+
+        function drawAxes() {
+            ctx.beginPath();
+            ctx.strokeStyle = "#4a3b2a"; 
+            ctx.lineWidth = 2;
+            ctx.moveTo(0, offsetY);
+            ctx.lineTo(canvas.width, offsetY);
+            ctx.lineTo(canvas.width - 10, offsetY - 5);
+            ctx.moveTo(canvas.width, offsetY);
+            ctx.lineTo(canvas.width - 10, offsetY + 5);
+            ctx.moveTo(offsetX, canvas.height);
+            ctx.lineTo(offsetX, 0);
+            ctx.lineTo(offsetX - 5, 10);
+            ctx.moveTo(offsetX, 0);
+            ctx.lineTo(offsetX + 5, 10);
+            ctx.stroke();
+            
+            ctx.font = "italic bold 22px Serif";
+            ctx.fillStyle = "#4a3b2a";
+            ctx.fillText("x", canvas.width - 20, offsetY + 25);
+            ctx.fillText("y", offsetX + 15, 20);
+            ctx.fillText("O", offsetX - 20, offsetY + 25);
+        }
+
+        function drawSymmetryAxis(h) {
+            const xPos = offsetX + h * scale;
+            ctx.beginPath();
+            ctx.strokeStyle = "#60a5fa"; 
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 6]); 
+            ctx.moveTo(xPos, 0);
+            ctx.lineTo(xPos, canvas.height);
+            ctx.stroke();
+            ctx.setLineDash([]); 
+
+            ctx.fillStyle = "#3b82f6";
+            ctx.font = "bold 14px Noto Serif TC";
+            ctx.fillText(`x = ${formatNum(h)}`, xPos + 5, 30);
+        }
+
+        function drawParabola(a, h, k, isGhost) {
+            ctx.beginPath();
+            if (isGhost) {
+                ctx.strokeStyle = "#a8a29e"; 
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+            } else {
+                ctx.strokeStyle = "#d97706"; 
+                ctx.lineWidth = 3;
+                ctx.setLineDash([]);
+            }
+
+            let startDraw = false;
+            for (let px = 0; px < canvas.width; px++) {
+                let mathX = (px - offsetX) / scale;
+                let mathY = a * Math.pow((mathX - h), 2) + k;
+                let py = offsetY - (mathY * scale);
+
+                if (py >= -100 && py <= canvas.height + 100) {
+                    if (!startDraw) {
+                        ctx.moveTo(px, py);
+                        startDraw = true;
+                    } else {
+                        ctx.lineTo(px, py);
+                    }
+                }
+            }
+            ctx.stroke();
+            ctx.setLineDash([]); 
+        }
+
+        function drawTranslationArrow(h_old, k_old, h_new, k_new) {
+            if (h_old === h_new && k_old === k_new) return;
+
+            const startX = offsetX + h_old * scale;
+            const startY = offsetY - k_old * scale;
+            const endX = offsetX + h_new * scale;
+            const endY = offsetY - k_new * scale;
+
+            ctx.beginPath();
+            ctx.strokeStyle = "rgba(239, 68, 68, 0.5)"; 
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+
+            ctx.setLineDash([]); 
+            const angle = Math.atan2(endY - startY, endX - startX);
+            const headLen = 10;
+            ctx.beginPath();
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(endX - headLen * Math.cos(angle - Math.PI / 6), endY - headLen * Math.sin(angle - Math.PI / 6));
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(endX - headLen * Math.cos(angle + Math.PI / 6), endY - headLen * Math.sin(angle + Math.PI / 6));
+            ctx.stroke();
+
+            ctx.fillStyle = "#9ca3af";
+            ctx.beginPath();
+            ctx.arc(startX, startY, 4, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        function drawIntercepts(a, h, k) {
+            // Y軸交點 (x=0)
+            const yInt = a * h * h + k;
+            drawPoint(0, yInt, "#2563eb", "", `(0, ${formatNum(yInt)})`);
+
+            // X軸交點 (y=0) -> a(x-h)^2 + k = 0
+            if (a === 0) return;
+            const val = -k / a;
+            
+            if (val > 0) {
+                const sqrtVal = Math.sqrt(val);
+                const x1 = h - sqrtVal;
+                const x2 = h + sqrtVal;
+                drawPoint(x1, 0, "#2563eb", "", `(${formatNum(x1)}, 0)`);
+                drawPoint(x2, 0, "#2563eb", "", `(${formatNum(x2)}, 0)`);
+            } else if (val === 0) {
+                drawPoint(h, 0, "#2563eb", "", `(${formatNum(h)}, 0)`);
+            }
+        }
+
+        function getGeneralFormStr(a, h, k) {
+            const b = -2 * a * h;
+            const c = a * h * h + k;
+            
+            let bSign = b >= 0 ? "＋" : "－";
+            let cSign = c >= 0 ? "＋" : "－";
+            let bAbs = Math.abs(b);
+            let cAbs = Math.abs(c);
+            let aStr = (a === 1) ? "" : (a === -1 ? "-" : formatNum(a));
+            let bStr = (bAbs === 1) ? "" : formatNum(bAbs);
+            
+            let bPart = (b === 0) ? "" : ` ${bSign} ${bStr}x`;
+            let cPart = (c === 0) ? "" : ` ${cSign} ${formatNum(cAbs)}`;
+            
+            let equationText = "";
+            if (b === 0 && c === 0) {
+                equationText = `y = ${aStr}x²`;
+            } else {
+                equationText = `y = ${aStr}x²${bPart}${cPart}`;
+            }
+            return equationText.replace("y = ", "");
+        }
+
+        function updateInfo(a, h, k, h_old, k_old) {
+            const directionText = a > 0 ? "向上" : "向下";
+            displayDirectionList.forEach(el => el.textContent = directionText);
+
+            if (isTranslationMode) {
+                let deltaK = k - k_old;
+                let deltaH = h - h_old;
+
+                let vText = "無垂直平移";
+                if (deltaK > 0) vText = `向上 ${formatNum(deltaK)} 單位`;
+                if (deltaK < 0) vText = `向下 ${formatNum(Math.abs(deltaK))} 單位`;
+                transTextUp.textContent = vText;
+
+                let hText = "無水平平移";
+                if (deltaH > 0) hText = `向右 ${formatNum(deltaH)} 單位`;
+                if (deltaH < 0) hText = `向左 ${formatNum(Math.abs(deltaH))} 單位`;
+                transTextRight.textContent = hText;
+
+                drawPoint(h, k, "#b91c1c", "新V", `(${formatNum(h)}, ${formatNum(k)})`);
+                if (h !== h_old || k !== k_old) {
+                    drawPoint(h_old, k_old, "#6b7280", "舊V", `(${formatNum(h_old)}, ${formatNum(k_old)})`);
+                }
+
+                let simpleForm = getGeneralFormStr(a, h, k);
+                let oldForm = getGeneralFormStr(a, h_old, k_old);
+
+                if(displayGeneralStep1) displayGeneralStep1.textContent = oldForm;
+                if(displayGeneralStep2) displayGeneralStep2.textContent = simpleForm;
+                
+                currentGeneralEquation = `y = ${simpleForm}`; 
+            } else {
+                drawPoint(h, k, "#b91c1c", "V", `(${formatNum(h)}, ${formatNum(k)})`);
+                let simpleForm = getGeneralFormStr(a, h, k);
+                if(displayGeneralSimple) displayGeneralSimple.textContent = simpleForm;
+                currentGeneralEquation = `y = ${simpleForm}`;
+            }
+        }
+
+        function copyEquation(source) {
+            let eqToCopy = currentGeneralEquation;
+            if (!eqToCopy) return;
+            const tempInput = document.createElement("input");
+            tempInput.value = eqToCopy;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand("copy");
+            document.body.removeChild(tempInput);
+            
+            const toastId = source === 'simple' ? 'copy-toast-simple' : 'copy-toast-trans'; 
+            const toast = document.getElementById('copy-toast-simple');
+            if(toast) {
+                toast.style.opacity = "1";
+                setTimeout(() => {
+                    toast.style.opacity = "0";
+                }, 2000);
+            }
+        }
+
+        function drawPoint(mathX, mathY, color, label, coordText) {
+            const px = offsetX + mathX * scale;
+            const py = offsetY - mathY * scale;
+            if (px < 0 || px > canvas.width || py < 0 || py > canvas.height) return;
+
+            ctx.beginPath();
+            ctx.arc(px, py, 4, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            
+            // Font size 2x (14px -> 28px)
+            // Adjusted size 22px
+            ctx.font = "bold 22px Noto Serif TC";
+            const text = label + (label ? " " : "") + coordText;
+            const textWidth = ctx.measureText(text).width;
+            
+            // Adjust offsets for larger font
+            let textX = px + 12;
+            let textY = py - 12;
+
+            // Collision detection with canvas edges
+            if (px > canvas.width - textWidth - 20) {
+                textX = px - textWidth - 15;
+            }
+            if (py < 50) {
+                textY = py + 40;
+            }
+
+            // Background for readability
+            ctx.fillStyle = "rgba(255, 250, 240, 0.7)";
+            // Adjust rect for 22px font (approx 24px height)
+            ctx.fillRect(textX - 4, textY - 24, textWidth + 8, 28);
+
+            ctx.fillStyle = "#3e2723";
+            ctx.fillText(text, textX, textY);
+        }
+
+        function formatNum(num) {
+            return parseFloat(num.toFixed(2));
+        }
+    </script>
+</body>
+</html>
