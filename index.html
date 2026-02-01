@@ -196,8 +196,7 @@
                     <span id="display-general-simple" class="text-lg font-bold font-mono text-amber-800 italic tracking-wider">
                         <!-- JS自動填入 -->
                     </span>
-                    <button onclick="copyEquation('simple')" class="btn-copy ml-2" title="複製一般式">複製</button>
-                    <div id="copy-toast-simple" class="absolute -bottom-6 text-xs text-green-700 font-bold opacity-0 transition-opacity duration-300">已複製！</div>
+                    <!-- 移除複製按鈕 -->
                 </div>
             </div>
 
@@ -800,23 +799,7 @@
         }
 
         function copyEquation(source) {
-            let eqToCopy = currentGeneralEquation;
-            if (!eqToCopy) return;
-            const tempInput = document.createElement("input");
-            tempInput.value = eqToCopy;
-            document.body.appendChild(tempInput);
-            tempInput.select();
-            document.execCommand("copy");
-            document.body.removeChild(tempInput);
-            
-            const toastId = source === 'simple' ? 'copy-toast-simple' : 'copy-toast-trans'; 
-            const toast = document.getElementById('copy-toast-simple');
-            if(toast) {
-                toast.style.opacity = "1";
-                setTimeout(() => {
-                    toast.style.opacity = "0";
-                }, 2000);
-            }
+            // ... (copy function is unused for now, keeping as placeholder)
         }
 
         function drawPoint(mathX, mathY, color, label, coordText) {
